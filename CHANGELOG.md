@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1（2026-11-07）
+
+- 新增与包名同名的命令别名 `email-mcp-lite`，`uvx email-mcp-lite web` 开箱即用
+
 ## 0.1.0（2026-11-07）
 
 首个公开版本。
