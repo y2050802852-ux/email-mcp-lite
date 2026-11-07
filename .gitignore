@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# macOS
+.DS_Store
+
+# 编辑器
+.idea/
+.vscode/
+
+# ★ 凭证与隐私（双保险：这些文件绝不应出现在仓库里）
+accounts.json
+.email-mcp/
+*.authcode
+.env

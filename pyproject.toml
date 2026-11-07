@@ -1,0 +1,48 @@
+[project]
+name = "email-mcp-lite"
+version = "0.1.0"
+description = "轻量级多账户邮件 MCP Server（IMAP/SMTP 通用适配器，零额外依赖）"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "ysh" }]
+requires-python = ">=3.10"
+keywords = ["mcp", "model-context-protocol", "email", "imap", "smtp", "agent", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "mcp>=1.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/y2050802852-ux/email-mcp-lite"
+Repository = "https://github.com/y2050802852-ux/email-mcp-lite"
+Issues = "https://github.com/y2050802852-ux/email-mcp-lite/issues"
+
+[project.scripts]
+email-mcp = "email_mcp.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/email_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

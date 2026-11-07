@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>email-mcp · 账户管理</title>
+<style>
+  :root {
+    --bg: #f5f6fa; --card: #ffffff; --text: #1c2333; --muted: #7a8199;
+    --border: #e4e7f0; --accent: #4f6ef7; --accent-weak: #eef1ff;
+    --ok: #18a058; --err: #d03050; --shadow: 0 1px 3px rgba(28,35,51,.06), 0 6px 18px rgba(28,35,51,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161d; --card: #1d2029; --text: #e8eaf2; --muted: #8b90a5;
+      --border: #2c3040; --accent: #7189ff; --accent-weak: #262b3d;
+      --ok: #3fc27d; --err: #ff7085; --shadow: 0 1px 3px rgba(0,0,0,.3), 0 8px 22px rgba(0,0,0,.25);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(900px 420px at 85% -10%, var(--accent-weak), transparent 65%),
+      var(--bg);
+    color: var(--text); min-height: 100vh; padding: 40px 16px 80px;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+  header h1 { font-size: 24px; letter-spacing: .3px; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  section { margin-top: 34px; }
+  h2 { font-size: 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  h2 .muted { font-weight: 400; font-size: 13px; color: var(--muted); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 14px;
+    transition: transform .16s ease, box-shadow .16s ease;
+    animation: rise .28s ease both;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 2px 6px rgba(28,35,51,.08), 0 12px 26px rgba(28,35,51,.09); }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .badge {
+    background: var(--accent-weak); color: var(--accent); font-weight: 600;
+    border-radius: 8px; padding: 4px 10px; font-size: 13px; white-space: nowrap;
+  }
+  .card .info { flex: 1; min-width: 0; }
+  .card .info .user { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .info .host { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: 9px; border: 1px solid transparent;
+    padding: 7px 14px; font-size: 13px; transition: all .15s ease;
+  }
+  button:active { transform: scale(.97); }
+  button.primary { background: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); box-shadow: 0 4px 14px rgba(79,110,247,.35); }
+  button.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+  button.ghost:hover { border-color: var(--accent); color: var(--accent); }
+  button.danger { background: transparent; color: var(--err); border-color: var(--border); }
+  button.danger:hover { border-color: var(--err); background: rgba(208,48,80,.06); }
+  button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+  .chips { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .chip {
+    background: var(--card); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 999px; padding: 6px 16px; font-size: 13px;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+  form {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 20px 22px;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  .grid .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  input {
+    width: 100%; font: inherit; font-size: 14px; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 9px;
+    padding: 9px 12px; transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,110,247,.15); }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); padding-top: 22px; }
+  .check input { width: auto; }
+  .actions { display: flex; gap: 10px; margin-top: 20px; align-items: center; }
+
+  #test-result { font-size: 13px; margin-top: 14px; min-height: 20px; }
+  #test-result .ok { color: var(--ok); } #test-result .err { color: var(--err); }
+  .spin {
+    display: inline-block; width: 13px; height: 13px; vertical-align: -2px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty {
+    border: 1px dashed var(--border); border-radius: 14px; padding: 26px;
+    text-align: center; color: var(--muted); font-size: 13px;
+  }
+  .hidden { display: none; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translate(-50%, 16px);
+    background: var(--text); color: var(--bg); padding: 10px 20px; border-radius: 10px;
+    font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity .22s ease, transform .22s ease; max-width: 80vw;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>📧 email-mcp</h1>
+    <p class="sub">本地账户管理 · 仅监听 127.0.0.1 · 密码只存本机 accounts.json</p>
+  </header>
+
+  <section>
+    <h2>已配置账户 <span class="muted" id="count"></span></h2>
+    <div id="list"></div>
+    <div id="empty" class="empty hidden">还没有账户，用下面的表单添加第一个邮箱 ↓</div>
+  </section>
+
+  <section>
+    <h2 id="form-title">添加账户</h2>
+    <div class="chips" id="chips">
+      <button class="chip" data-p="qq">QQ</button>
+      <button class="chip" data-p="163">163</button>
+      <button class="chip" data-p="gmail">Gmail</button>
+      <button class="chip on" data-p="custom">自定义</button>
+    </div>
+    <form id="f" autocomplete="off">
+      <div class="grid">
+        <div><label>账户短标识（用于工具里的 account 参数）</label><input name="id" required pattern="[A-Za-z0-9_-]{1,32}" placeholder="suda"></div>
+        <div><label>发件显示名（可空）</label><input name="from_name" placeholder="ysh"></div>
+        <div class="full"><label>登录用户名（邮箱地址）</label><input name="user" required type="email" placeholder="me@stu.suda.edu.cn"></div>
+        <div class="full"><label>密码 / 授权码</label><input name="password" required type="password" placeholder="网页登录密码或客户端专用密码"></div>
+        <div><label>IMAP 服务器</label><input name="imap_host" required placeholder="imap.stu.suda.edu.cn"></div>
+        <div><label>IMAP 端口</label><input name="imap_port" type="number" value="993"></div>
+        <div><label>SMTP 服务器</label><input name="smtp_host" required placeholder="smtp.stu.suda.edu.cn"></div>
+        <div><label>SMTP 端口</label><input name="smtp_port" type="number" value="465"></div>
+        <div class="check full"><input type="checkbox" name="smtp_ssl" checked><span>SMTP 使用 SSL（465 端口勾选；587 STARTTLS 则取消）</span></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="ghost" id="btn-test">测试连接</button>
+        <button type="submit" class="primary" id="btn-save">保存账户</button>
+      </div>
+      <div id="test-result"></div>
+    </form>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let editingId = null;
+
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { "Content-Type": "application/json", "X-Requested-With": "email-mcp",
+               ...(opts.headers || {}) },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+async function loadAccounts() {
+  const accs = await api("/api/accounts");
+  const list = $("#list");
+  list.innerHTML = "";
+  $("#count").textContent = accs.length ? `（${accs.length}）` : "";
+  $("#empty").classList.toggle("hidden", accs.length > 0);
+  accs.forEach((a, i) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.animationDelay = `${i * 40}ms`;
+    card.innerHTML = `
+      <span class="badge">${a.id}</span>
+      <div class="info">
+        <div class="user">${a.user}</div>
+        <div class="host">imap ${a.imap_host}:${a.imap_port} · smtp ${a.smtp_host || "-"}:${a.smtp_port}</div>
+      </div>
+      <button class="ghost" data-act="test">测试</button>
+      <button class="ghost" data-act="edit">编辑</button>
+      <button class="danger" data-act="del">删除</button>`;
+    card.querySelector('[data-act="test"]').onclick = () => testConnection(a.id, card);
+    card.querySelector('[data-act="edit"]').onclick = () => fillForm(a);
+    card.querySelector('[data-act="del"]').onclick = async () => {
+      if (!confirm(`删除账户 ${a.id}（${a.user}）？`)) return;
+      await api(`/api/accounts/${encodeURIComponent(a.id)}`, { method: "DELETE" });
+      toast(`已删除 ${a.id}`); loadAccounts();
+    };
+    list.appendChild(card);
+  });
+}
+
+async function testConnection(id, el) {
+  const btn = el.querySelector('[data-act="test"]');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    const r = await api(`/api/accounts/${encodeURIComponent(id)}/test`, { method: "POST" });
+    toast(r.imap_ok && r.smtp_ok ? `✓ ${id} 连接正常（${r.folders} 个文件夹）`
+        : r.imap_ok ? `⚠ IMAP 正常（${r.folders} 个文件夹），SMTP 失败：${r.smtp_error || ""}`
+        : `✗ ${r.error}`);
+  } catch (e) { toast("✗ " + e.message); }
+  btn.disabled = false; btn.textContent = "测试";
+}
+
+function fillForm(a) {
+  editingId = a.id;
+  $("#form-title").textContent = `编辑账户：${a.id}`;
+  for (const [k, v] of Object.entries(a)) {
+    const f = $("#f").elements[k];
+    if (f) f.value = v;
+  }
+  $("#f").elements.password.value = "";
+  $("#f").elements.password.placeholder = "留空则保留原密码";
+  $("#f").elements.smtp_ssl.checked = !!a.smtp_ssl;
+  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+}
+
+$("#chips").addEventListener("click", e => {
+  const chip = e.target.closest(".chip"); if (!chip) return;
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("on"));
+  chip.classList.add("on");
+  const P = {
+    qq:    { imap_host: "imap.qq.com",    imap_port: 993, smtp_host: "smtp.qq.com",    smtp_port: 465 },
+    "163": { imap_host: "imap.163.com",   imap_port: 993, smtp_host: "smtp.163.com",   smtp_port: 465 },
+    gmail: { imap_host: "imap.gmail.com", imap_port: 993, smtp_host: "smtp.gmail.com", smtp_port: 465 },
+  }[chip.dataset.p];
+  if (P) for (const [k, v] of Object.entries(P)) $("#f").elements[k].value = v;
+});
+
+$("#btn-test").onclick = async () => {
+  const box = $("#test-result");
+  box.innerHTML = '<span class="spin"></span> 正在测试连接…';
+  try {
+    const r = await api("/api/test", { method: "POST", body: JSON.stringify(formData()) });
+    if (r.imap_ok && r.smtp_ok)
+      box.innerHTML = `<span class="ok">✓ 连接正常：IMAP ${r.folders} 个文件夹，SMTP 可登录</span>`;
+    else if (r.imap_ok)
+      box.innerHTML = `<span class="err">⚠ IMAP 正常（${r.folders} 个文件夹），SMTP 登录失败：${r.smtp_error || ""}</span>`;
+    else
+      box.innerHTML = `<span class="err">✗ ${r.error}</span>`;
+  } catch (e) { box.innerHTML = `<span class="err">✗ ${e.message}</span>`; }
+};
+
+function formData() {
+  const f = $("#f").elements;
+  return {
+    id: f.id.value.trim(), user: f.user.value.trim(), password: f.password.value,
+    imap_host: f.imap_host.value.trim(), imap_port: +f.imap_port.value || 993,
+    smtp_host: f.smtp_host.value.trim(), smtp_port: +f.smtp_port.value || 465,
+    smtp_ssl: f.smtp_ssl.checked, from_name: f.from_name.value.trim(),
+  };
+}
+
+$("#f").onsubmit = async e => {
+  e.preventDefault();
+  const data = formData();
+  // 编辑且密码留空 = 保留原密码（由后端处理，密码从不回传到页面）
+  await api("/api/accounts", { method: "POST", body: JSON.stringify(data) });
+  toast(editingId ? `已更新 ${data.id}` : `已添加 ${data.id}`);
+  resetForm(); loadAccounts();
+};
+
+function resetForm() {
+  editingId = null;
+  $("#f").reset();
+  $("#f").elements.imap_port.value = 993;
+  $("#f").elements.smtp_port.value = 465;
+  $("#f").elements.smtp_ssl.checked = true;
+  $("#f").elements.password.placeholder = "网页登录密码或客户端专用密码";
+  $("#form-title").textContent = "添加账户";
+  $("#test-result").innerHTML = "";
+}
+
+loadAccounts();
+</script>
+</body>
+</html>
