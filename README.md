@@ -1,3 +1,4 @@
+# [![tests](https://github.com/y2050802852-ux/email-mcp-lite/actions/workflows/tests.yml/badge.svg)](https://github.com/y2050802852-ux/email-mcp-lite/actions/workflows/tests.yml)
 # email-mcp-lite
 
 轻量级多账户邮件 MCP Server。一个 IMAP/SMTP 通用适配器覆盖所有标准邮箱（QQ、163、Gmail、学校邮箱、企业邮箱……），让支持 MCP 协议的 Agent 统一完成**读取、搜索、发送、回复、转发、草稿、标记、移动、归档、删除**邮件。
