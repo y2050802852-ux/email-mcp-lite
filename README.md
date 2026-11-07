@@ -76,6 +76,19 @@ uv run email-mcp remove qq    # 删除账户
 
 把 `/path/to/email-mcp-lite` 换成你的克隆路径。
 
+**从 PyPI 安装的用户**无需克隆仓库，直接：
+
+```json
+{
+  "mcpServers": {
+    "email": {
+      "command": "uvx",
+      "args": ["email-mcp-lite"]
+    }
+  }
+}
+```
+
 **Claude Desktop**（`claude_desktop_config.json`）同理。改完配置重启客户端即可。
 
 可选环境变量：
