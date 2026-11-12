@@ -148,6 +148,75 @@ class TestSendTool:
             server.send_email(subject="s", body="b")
 
 
+class TestScheduledEmailTools:
+    def test_schedule_requires_offset_and_returns_id(self, monkeypatch):
+        from datetime import datetime, timezone
+        import email_mcp.server as module
+        monkeypatch.setattr(module, "_utc_now", lambda: datetime(2029, 1, 1, tzinfo=timezone.utc))
+        with pytest.raises(ValueError, match="UTC offset"):
+            server.schedule_email(account="qq", to="a@b.com", send_at="2030-01-01T12:00:00",
+                                  subject="s", body="b")
+        result = server.schedule_email(account="qq", to="a@b.com", send_at="2030-01-01T12:00:00+08:00",
+                                       subject="s", body="private body")
+        assert "scheduled" in result and "a@b.com" in result
+        assert "private body" not in server.list_scheduled_emails()
+
+    def test_readonly_blocks_scheduling(self, monkeypatch):
+        monkeypatch.setenv("EMAIL_MCP_READONLY", "1")
+        with pytest.raises(RuntimeError, match="只读"):
+            server.schedule_email(account="qq", to="a@b.com", send_at="2030-01-01T12:00:00+00:00",
+                                  subject="s", body="b")
+
+    def test_schedule_edit_cancel_and_confirm(self, monkeypatch):
+        from datetime import datetime, timezone
+        import email_mcp.server as module
+        monkeypatch.setattr(module, "_utc_now", lambda: datetime(2029, 1, 1, tzinfo=timezone.utc))
+        created = server.schedule_email(account="qq", to="a@b.com", send_at="2030-01-01T12:00:00+00:00",
+                                        subject="s", body="b", mode="confirm")
+        task_id = created.split()[1]
+        assert "已更新" in server.edit_scheduled_email(task_id, subject="new")
+        # Put task into confirmation state using the store's due processing.
+        from email_mcp.scheduled_store import ScheduledEmailStore
+        store = ScheduledEmailStore()
+        store.claim_due(datetime(2030, 1, 1, 12, 0, tzinfo=timezone.utc))
+        assert "已发送" in server.confirm_scheduled_email(task_id)
+
+    def test_edit_can_clear_cc_and_attachments(self, monkeypatch):
+        from datetime import datetime, timezone
+        import email_mcp.server as module
+        monkeypatch.setattr(module, "_utc_now", lambda: datetime(2029, 1, 1, tzinfo=timezone.utc))
+        created = server.schedule_email(account="qq", to="a@b.com", send_at="2030-01-01T12:00:00+00:00",
+                                        subject="s", body="b", cc="c@d.com", attachments=["/tmp/a"])
+        task_id = created.split()[1]
+        server.edit_scheduled_email(task_id, cc=[], attachments=[])
+        task = module._scheduled_store().get(task_id)
+        assert task.cc == [] and task.attachments == []
+
+    def test_edit_rejects_invalid_mode(self, monkeypatch):
+        from datetime import datetime, timezone
+        import email_mcp.server as module
+        monkeypatch.setattr(module, "_utc_now", lambda: datetime(2029, 1, 1, tzinfo=timezone.utc))
+        created = server.schedule_email(account="qq", to="a@b.com", send_at="2030-01-01T12:00:00+00:00",
+                                        subject="s", body="b")
+        with pytest.raises(ValueError, match="mode"):
+            server.edit_scheduled_email(created.split()[1], mode="later")
+
+    def test_retry_unknown_requires_explicit_call(self, monkeypatch):
+        from datetime import datetime, timezone
+        import email_mcp.server as module
+        from email_mcp.scheduled_store import ScheduledEmailStore
+        monkeypatch.setattr(module, "_utc_now", lambda: datetime(2029, 1, 1, tzinfo=timezone.utc))
+        created = server.schedule_email(account="qq", to="a@b.com", send_at="2030-01-01T12:00:00+00:00",
+                                        subject="s", body="b")
+        task_id = created.split()[1]
+        store = ScheduledEmailStore()
+        store.transition(task_id, {"scheduled"}, "sending")
+        store.transition(task_id, {"sending"}, "unknown", last_error="timeout")
+        result = server.retry_scheduled_email(task_id)
+        assert "状态=sent" in result
+        assert "重复" in result
+
+
 class TestMutatingTools:
     def test_mark(self, fake_mail_world):
         out = server.mark_email(_eid(2), read=True)

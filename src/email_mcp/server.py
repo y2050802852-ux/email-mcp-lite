@@ -9,12 +9,14 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 from mcp.server.mcpserver import MCPServer
 
 from .adapter import get_adapter
-from .config import CONFIG_FILE, load_accounts
+from .config import CONFIG_FILE, get_account, load_accounts
+from .scheduled_store import ScheduledEmail, ScheduledEmailStore
 from .models import parse_id
 
 mcp = MCPServer(
@@ -297,6 +299,138 @@ def delete_email(id: str, permanent: bool = False) -> str:
     _writable()
     account_id, _, _ = parse_id(id)
     return _get_adapter(account_id).delete(id, permanent=permanent)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _scheduled_store() -> ScheduledEmailStore:
+    return ScheduledEmailStore()
+
+
+def _addresses(value: str | list[str]) -> list[str]:
+    if isinstance(value, str):
+        return _addr_list(value)
+    return _addr_list(value)
+
+
+@mcp.tool()
+def schedule_email(account: str, to: str | list[str], send_at: str, subject: str,
+                   body: str, cc: str | list[str] = "",
+                   attachments: Optional[list[str]] = None, mode: str = "auto") -> str:
+    """安排邮件定时发送。send_at 必须是带时区偏移的 ISO 8601 时间；mode 为 auto 或 confirm。"""
+    _writable()
+    try:
+        scheduled_local = datetime.fromisoformat(send_at)
+    except ValueError as e:
+        raise ValueError("send_at 必须是带 UTC offset 的 ISO 8601 时间") from e
+    if scheduled_local.tzinfo is None or scheduled_local.utcoffset() is None:
+        raise ValueError("send_at 必须包含 UTC offset")
+    now = _utc_now()
+    scheduled_utc = scheduled_local.astimezone(timezone.utc)
+    if scheduled_utc <= now:
+        raise ValueError("send_at 必须是未来时间")
+    if mode not in {"auto", "confirm"}:
+        raise ValueError("mode 必须是 auto 或 confirm")
+    if not get_account(account):
+        raise ValueError(f"邮箱账户不存在: {account}")
+    recipients = _addresses(to)
+    if not recipients:
+        raise ValueError("缺少收件人 to")
+    if not subject.strip() or not body:
+        raise ValueError("主题和正文不能为空")
+    task = _scheduled_store().create(ScheduledEmail(
+        account=account, to=recipients, cc=_addresses(cc), subject=subject.strip(), body=body,
+        attachments=[os.path.abspath(os.path.expanduser(p)) for p in (attachments or [])],
+        send_at=scheduled_utc, offset=scheduled_local.strftime("%z"), mode=mode,
+    ))
+    return f"任务 {task.id} 已安排: To={', '.join(task.to)}; Subject={task.subject}; SendAt={send_at}; Mode={mode}; Status={task.status}"
+
+
+@mcp.tool()
+def list_scheduled_emails(status: str = "", limit: int = 50) -> str:
+    """列出定时邮件任务摘要；不会显示邮件正文或凭证。"""
+    tasks = _scheduled_store().list(status=status, limit=limit)
+    if not tasks:
+        return "没有定时邮件任务"
+    return "\n".join(
+        f"{t.id} | {t.status} | {t.account} | {', '.join(t.to)} | {t.subject} | {_iso_local(t.send_at, t.offset)}"
+        for t in tasks
+    )
+
+
+def _iso_local(value: datetime, offset: str) -> str:
+    sign = 1 if offset.startswith("+") else -1
+    digits = offset.lstrip("+-")
+    hours, minutes = int(digits[:2]), int(digits[2:] or "0")
+    from datetime import timedelta
+    local = value.astimezone(timezone(timedelta(minutes=sign * (hours * 60 + minutes))))
+    return local.isoformat()
+
+
+@mcp.tool()
+def edit_scheduled_email(task_id: str, send_at: str = "", to: str | list[str] | None = None,
+                         cc: str | list[str] | None = None, subject: str = "", body: str = "",
+                         attachments: Optional[list[str]] = None, mode: str = "") -> str:
+    """编辑尚未到期的定时任务；只传需要更改的字段。"""
+    _writable()
+    changes = {}
+    if send_at:
+        parsed = datetime.fromisoformat(send_at)
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError("send_at 必须包含 UTC offset")
+        if parsed.astimezone(timezone.utc) <= _utc_now():
+            raise ValueError("send_at 必须是未来时间")
+        changes.update(send_at=parsed.astimezone(timezone.utc), offset=parsed.strftime("%z"))
+    if to is not None:
+        recipients = _addresses(to)
+        if not recipients:
+            raise ValueError("缺少收件人 to")
+        changes["to"] = recipients
+    if cc is not None:
+        changes["cc"] = _addresses(cc)
+    if subject:
+        if not subject.strip():
+            raise ValueError("主题不能为空")
+        changes["subject"] = subject.strip()
+    if body:
+        changes["body"] = body
+    if attachments is not None:
+        changes["attachments"] = [os.path.abspath(os.path.expanduser(p)) for p in attachments]
+    if mode:
+        if mode not in {"auto", "confirm"}:
+            raise ValueError("mode 必须是 auto 或 confirm")
+        changes["mode"] = mode
+    task = _scheduled_store().update(task_id, changes)
+    return f"任务 {task.id} 已更新，状态={task.status}"
+
+
+@mcp.tool()
+def cancel_scheduled_email(task_id: str) -> str:
+    """取消尚未开始发送的定时任务。"""
+    _writable()
+    task = _scheduled_store().cancel(task_id)
+    return f"任务 {task.id} 已取消"
+
+
+@mcp.tool()
+def confirm_scheduled_email(task_id: str) -> str:
+    """立即发送已到期且等待确认的任务。"""
+    _writable()
+    from .scheduler import Scheduler
+    task = Scheduler(_scheduled_store(), clock=_utc_now).confirm(task_id)
+    return f"任务 {task.id} 状态={task.status}" + ("，已发送" if task.status == "sent" else "")
+
+
+@mcp.tool()
+def retry_scheduled_email(task_id: str) -> str:
+    """明确重试失败或结果未知的定时邮件；结果未知时可能造成重复发送。"""
+    _writable()
+    from .scheduler import Scheduler
+    task = Scheduler(_scheduled_store(), clock=_utc_now).retry(task_id)
+    warning = "；原发送结果未知，本次重试可能导致重复发送" if "previous delivery outcome was unknown" in task.last_error else ""
+    return f"任务 {task.id} 状态={task.status}{warning}"
 
 
 def run() -> None:

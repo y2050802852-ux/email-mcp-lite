@@ -27,6 +27,11 @@ from .parsing import build_detail, build_meta_from_headers, sanitize_filename, t
 
 _SOCKET_TIMEOUT = 30
 
+
+class UncertainDeliveryError(RuntimeError):
+    """SMTP failed during message transfer; the remote acceptance is unknown."""
+
+
 _TRASH_PATTERNS = ("trash", "deleted", "已删除", "回收站", "bin")
 _DRAFT_PATTERNS = ("draft", "草稿")
 
@@ -428,7 +433,10 @@ class ImapSmtpAdapter:
     def send(self, msg: EmailMessage) -> str:
         smtp = self._smtp()
         try:
-            smtp.send_message(msg)
+            try:
+                smtp.send_message(msg)
+            except Exception as e:
+                raise UncertainDeliveryError(str(e)) from e
         finally:
             try:
                 smtp.quit()

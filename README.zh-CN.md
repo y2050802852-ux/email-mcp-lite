@@ -43,6 +43,30 @@ cd email-mcp-lite && uv sync
 uv run email-mcp web          # 同一个管理页
 ```
 
+## 定时发送
+
+定时任务由本机 SQLite 保存，独立后台服务执行；配置好邮箱账户后，在 macOS 安装用户级 launchd 服务：
+
+```bash
+uvx email-mcp-lite service install
+uvx email-mcp-lite service status
+uvx email-mcp-lite service uninstall
+```
+
+服务在当前用户登录会话运行。服务未运行期间错过的计划会标记为 `missed`，不会自动补发。若 SMTP 发送阶段中断且无法确认是否已接受，任务标记为 `unknown`；手动重试可能造成重复发送。正文、收件人和附件路径保存在 `~/.email-mcp/scheduled-emails.sqlite3`，仅本机文件权限保护，请勿同步或提交该目录。
+
+MCP 工具示例：
+
+```text
+schedule_email(account="qq", to="a@example.com",
+               send_at="2026-11-13T09:00:00+08:00",
+               subject="提醒", body="会议将在一小时后开始", mode="auto")
+list_scheduled_emails(status="scheduled")
+cancel_scheduled_email(task_id="...")
+```
+
+`mode="confirm"` 会在到期后等待你调用 `confirm_scheduled_email` 才发送。所有计划时间必须带 UTC 偏移量。
+
 ## 账户管理
 
 **网页（推荐）**——`uvx email-mcp-lite web`
@@ -119,6 +143,12 @@ uvx --from email-mcp-lite email-mcp remove <id>
 | `mark_email` | 已读/未读、加星/去星 | 中 |
 | `move_email` | 移动到文件夹（归档 = 移到你的 Archive 文件夹） | 中 |
 | `delete_email` | 默认软删除移入回收站；`permanent=True` 彻底删除 | 高 |
+| `schedule_email` | 安排定时发送（自动发送或到期后等待确认） | 高 |
+| `list_scheduled_emails` | 查看定时任务状态，不显示正文 | 低 |
+| `edit_scheduled_email` | 编辑尚未开始发送的任务 | 高 |
+| `cancel_scheduled_email` | 取消未开始发送的任务 | 中 |
+| `confirm_scheduled_email` | 立即发送到期且等待确认的任务 | 高 |
+| `retry_scheduled_email` | 明确重试失败/结果未知任务 | 高 |
 
 **邮件 ID** 形如 `qq|INBOX|1234`（`account|folder|uid`），无状态——从 `search_emails` 结果原样取用即可。
 

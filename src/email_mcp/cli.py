@@ -80,6 +80,29 @@ def cmd_web(args) -> None:
     serve(port=args.port)
 
 
+def cmd_scheduler_run(_args) -> None:
+    from .scheduler import Scheduler
+    try:
+        Scheduler().run_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+def cmd_service_install(_args) -> None:
+    from .service import install_service
+    print(f"✓ 已安装: {install_service()}")
+
+
+def cmd_service_uninstall(_args) -> None:
+    from .service import uninstall_service
+    print("✓ 已卸载" if uninstall_service() else "服务未安装")
+
+
+def cmd_service_status(_args) -> None:
+    from .service import service_status
+    print(service_status())
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="email-mcp",
@@ -110,6 +133,17 @@ def main(argv: list[str] | None = None) -> None:
     p_web = sub.add_parser("web", help="打开本地网页管理账户（推荐）")
     p_web.add_argument("--port", type=int, default=8642, help="监听端口（默认 8642）")
     p_web.set_defaults(func=cmd_web)
+
+    p_scheduler = sub.add_parser("scheduler", help="后台定时任务调度器")
+    scheduler_sub = p_scheduler.add_subparsers(dest="scheduler_cmd", required=True)
+    p_scheduler_run = scheduler_sub.add_parser("run", help="前台运行调度器")
+    p_scheduler_run.set_defaults(func=cmd_scheduler_run)
+
+    p_service = sub.add_parser("service", help="管理 macOS launchd 服务")
+    service_sub = p_service.add_subparsers(dest="service_cmd", required=True)
+    service_sub.add_parser("install", help="安装并启动用户级后台服务").set_defaults(func=cmd_service_install)
+    service_sub.add_parser("uninstall", help="停止并移除后台服务").set_defaults(func=cmd_service_uninstall)
+    service_sub.add_parser("status", help="查看后台服务状态").set_defaults(func=cmd_service_status)
 
     args = parser.parse_args(argv)
     if args.cmd is None:

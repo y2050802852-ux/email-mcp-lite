@@ -43,6 +43,30 @@ cd email-mcp-lite && uv sync
 uv run email-mcp web          # same admin page
 ```
 
+## Scheduled email
+
+Scheduled tasks are stored in a local SQLite database and delivered by a separate background service. On macOS, install the per-user launchd agent after configuring a mailbox:
+
+```bash
+uvx email-mcp-lite service install
+uvx email-mcp-lite service status
+uvx email-mcp-lite service uninstall
+```
+
+The service runs in the current user's login session. Tasks whose send time passes while the service is stopped become `missed` and are not sent automatically. If SMTP is interrupted during message transfer and acceptance is uncertain, the task becomes `unknown`; manually retrying may send a duplicate. Message bodies, recipients, and attachment paths are stored in `~/.email-mcp/scheduled-emails.sqlite3`; protect this local directory and do not sync or commit it.
+
+Example MCP request:
+
+```text
+schedule_email(account="qq", to="a@example.com",
+               send_at="2026-11-13T09:00:00+08:00",
+               subject="Reminder", body="The meeting starts in an hour", mode="auto")
+list_scheduled_emails(status="scheduled")
+cancel_scheduled_email(task_id="...")
+```
+
+Use `mode="confirm"` to wait until `confirm_scheduled_email` is called after the task becomes due. All send times must be ISO 8601 values with a UTC offset.
+
 ## Managing accounts
 
 **Web UI (recommended)** — `uvx email-mcp-lite web`
@@ -119,6 +143,12 @@ Restart the client afterwards. Optional environment variables:
 | `mark_email` | Read/unread, star/unstar | medium |
 | `move_email` | Move to a folder (archive = move to your Archive folder) | medium |
 | `delete_email` | Soft delete to Trash by default; `permanent=True` really deletes | high |
+| `schedule_email` | Schedule delivery (automatic or wait for confirmation) | high |
+| `list_scheduled_emails` | List task status without message bodies | low |
+| `edit_scheduled_email` | Edit a task before delivery starts | high |
+| `cancel_scheduled_email` | Cancel a task before delivery starts | medium |
+| `confirm_scheduled_email` | Send a due task waiting for confirmation | high |
+| `retry_scheduled_email` | Explicitly retry failed or unknown tasks | high |
 
 **Email IDs** look like `qq|INBOX|1234` (`account|folder|uid`) and are stateless — take them verbatim from `search_emails` results and pass them back.
 
